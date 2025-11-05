@@ -2,6 +2,35 @@ import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk
 
+# PROFILES
+profiles = {
+    1: {"name": "Mum", "seat_recline": 15, "heating": 20, "ambient_light": "medium"},
+    2: {"name": "Dad", "seat_recline": 25, "heating": 22, "ambient_light": "low"},
+    3: {"name": "Nikita", "seat_recline": 30, "heating": 21, "ambient_light": "medium"},
+    4: {"name": "Guest", "seat_recline": 10, "heating": 19, "ambient_light": "high"},
+}
+
+# LOAD PROFILE FUNCTION
+def load_profile(pid=None):
+    if pid is None:  # called by the button
+        try:
+            pid = int(entry.get())
+        except ValueError:
+            messagebox.showerror("Error", "Please enter a valid number.")
+            return
+
+    profile = profiles.get(pid)
+    if not profile:
+        messagebox.showerror("Error", "Profile not found.")
+        return
+
+    name_var.set(f"{profile['name']}'s Profile")
+    recline_var.set(f"{profile['seat_recline']}°")
+    heat_var.set(f"{profile['heating']}°C")
+    ambient_light_var.set(profile["ambient_light"].capitalize())
+
+
+
 # TKINTER UI SETUP
 root = tk.Tk()
 root.title("Discovery Dashboard Pivi Pro Prototype")
@@ -11,6 +40,7 @@ root.configure(bg="#0c0d0d")
 tk.Label(root, text="Enter Profile Number:", fg="white", bg="#0c0d0d").pack(pady=0)
 entry = tk.Entry(root, font=("Helvetica", 16))
 entry.pack()
+tk.Button(root, text="Load Profile", command=load_profile, bg="#2c2f30", fg="white").pack(pady=5)
 
 name_var = tk.StringVar(value="—")
 recline_var = tk.StringVar(value="—")
