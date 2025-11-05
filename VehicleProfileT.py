@@ -1,6 +1,11 @@
 import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk
+import cv2
+import mediapipe as mp
+import HandTrackingModule as htm
+import time
+import threading
 
 # PROFILES
 profiles = {
@@ -10,25 +15,21 @@ profiles = {
     4: {"name": "Guest", "seat_recline": 10, "heating": 19, "ambient_light": "high"},
 }
 
+numberOfFingers = 0  # shared finger variable
+
 # LOAD PROFILE FUNCTION
-def load_profile(pid=None):
-    if pid is None:  # called by the button
-        try:
-            pid = int(entry.get())
-        except ValueError:
-            messagebox.showerror("Error", "Please enter a valid number.")
-            return
+def load_profile(pid=None): 
+    if pid == 5: # guest for both 4 and 5 fingers
+        pid = 4 
 
     profile = profiles.get(pid)
     if not profile:
-        messagebox.showerror("Error", "Profile not found.")
-        return
+        return  # no profile for this number
 
     name_var.set(f"{profile['name']}'s Profile")
     recline_var.set(f"{profile['seat_recline']}°")
     heat_var.set(f"{profile['heating']}°C")
     ambient_light_var.set(profile["ambient_light"].capitalize())
-
 
 
 # TKINTER UI SETUP
@@ -37,10 +38,10 @@ root.title("Discovery Dashboard Pivi Pro Prototype")
 root.geometry("800x420")
 root.configure(bg="#0c0d0d")
 
-tk.Label(root, text="Enter Profile Number:", fg="white", bg="#0c0d0d").pack(pady=0)
-entry = tk.Entry(root, font=("Helvetica", 16))
-entry.pack()
-tk.Button(root, text="Load Profile", command=load_profile, bg="#2c2f30", fg="white").pack(pady=5)
+# tk.Label(root, text="Enter Profile Number:", fg="white", bg="#0c0d0d").pack(pady=0)
+# entry = tk.Entry(root, font=("Helvetica", 16))
+# entry.pack()
+# tk.Button(root, text="Load Profile", command=load_profile, bg="#2c2f30", fg="white").pack(pady=5)
 
 name_var = tk.StringVar(value="—")
 recline_var = tk.StringVar(value="—")
@@ -83,5 +84,66 @@ canvas_right.create_image(0, 0, image=bg_photo_right, anchor="nw")
 canvas_right.create_text(133, 50, text="Media", fill="#cfae1b",
                    font=("Helvetica", 20, "bold"), anchor="center")
 
-root.mainloop()
 
+# HAND TRACKING THREAD
+def run_hand_tracking():
+    global numberOfFingers
+
+    BLUE = (255, 0, 0)
+    GREEN = (0, 255, 0)
+    wCam, hCam = 500, 420
+
+    cap = cv2.VideoCapture(0)
+    cap.set(3, wCam)
+    cap.set(4, hCam)
+    pTime = 0
+
+    detector = htm.handDetector(detectionCon=0.7)
+
+    while True:
+        success, img = cap.read()
+        if not success:
+            break
+
+        fingers = {"4": 0, "8": 0, "12": 0, "16": 0, "20": 0}
+        img = detector.findHands(img)
+        landmarks, bbox = detector.findPosition(img, draw=False)
+
+        if len(landmarks) != 0:
+            if landmarks[4][1] > landmarks[3][1]: fingers["4"] = 1
+            if landmarks[8][2] <= landmarks[6][2]: fingers["8"] = 1
+            if landmarks[12][2] <= landmarks[10][2]: fingers["12"] = 1
+            if landmarks[16][2] <= landmarks[14][2]: fingers["16"] = 1
+            if landmarks[20][2] <= landmarks[18][2]: fingers["20"] = 1
+
+        numberOfFingers = sum(fingers.values())
+
+        # draw finger count
+        cv2.rectangle(img, (25, 150), (100, 400), GREEN, cv2.FILLED)
+        cv2.putText(img, f'{numberOfFingers}', (35, 300), cv2.FONT_HERSHEY_PLAIN, 6, BLUE, 2)
+
+        # FPS
+        cTime = time.time()
+        fps = 1 / (cTime - pTime) if cTime != pTime else 0
+        pTime = cTime
+        cv2.putText(img, f'FPS: {int(fps)}', (20, 70), cv2.FONT_HERSHEY_PLAIN, 3, BLUE, 2)
+
+        cv2.imshow("Camera", img)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+# AUTO UPDATE FUNCTION
+def auto_update():
+    if numberOfFingers in [1, 2, 3, 4, 5]:
+        load_profile(numberOfFingers)
+    root.after(1000, auto_update)  # check every 1 second
+
+
+# START THREADS + LOOP
+threading.Thread(target=run_hand_tracking, daemon=True).start()
+root.after(1000, auto_update)  # start auto-updating the UI
+root.mainloop()
